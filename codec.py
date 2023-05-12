@@ -14,6 +14,7 @@ class StatisticEncoder:
         for char in self.iter_chars:
             for distribution, char_idx in self.left_ctx_tree.encode(char):
                 yield from self.encoding_range.project_probability_pop_prefix(distribution, char_idx)
+        yield from self.encoding_range.get_nonzero_prefix_from_range()
 
 
 class StatisticDecoder:

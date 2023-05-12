@@ -64,20 +64,15 @@ def write_bits(iter_bits, f, chunk_size=5 * 1024):
     # TODO DELETE
     res = []
 
-    bit_chunk_size = 8 * chunk_size
-    bits = bitarray(bit_chunk_size, endian='big')
-
-    i = -1
-    for i, bit in enumerate(iter_bits):
+    bits = bitarray(0, endian='big')
+    for bit in iter_bits:
         res.append(bit)
-        bits[i % bit_chunk_size] = bit
-        if i % bit_chunk_size == bit_chunk_size - 1:
+        bits.append(bit)
+        if len(bits) == 8 * chunk_size:
             bits.tofile(f)
             bits.clear()
 
-    bits_left = (i + 1) % bit_chunk_size
-    bytes_left = (bits_left + 7) // 8
-    bits[:8 * bytes_left].tofile(f)
+    bits.tofile(f)
 
     print('WRITTEN BITS:')
     print(''.join(map(str, res)))
@@ -144,11 +139,13 @@ def console_app():
         unzip(args.source_file, args.dest_file)
 
 def test(f_name):
+    f_name = f'tests/{f_name}'
+
     zip(f_name, f'{f_name}.zip', CodingParams(context_length=3, mask_seen=False, exclude_on_update=False))
     unzip(f'{f_name}.zip', f'{f_name}.unzipped')
 
-    with open(f_name, mode='r') as original_f:
-        with open(f'{f_name}.unzipped') as unzipped_f:
+    with open(f_name, mode='r', encoding='iso-8859-1') as original_f:
+        with open(f'{f_name}.unzipped', mode='r', encoding='iso-8859-1') as unzipped_f:
             original = original_f.read()
             unzipped = unzipped_f.read()
             if original != unzipped:
@@ -159,8 +156,11 @@ def test(f_name):
 
 if __name__ == '__main__':
     # console_app()
+
     # test('empty.txt')
-    test('a.txt')
+    # test('a.txt')
+    # test('aaaaaa.txt')
+    test('test.txt')
 
 # if __name__ == '__main__':
 #     pass

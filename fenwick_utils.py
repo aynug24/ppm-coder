@@ -34,4 +34,4 @@ class ExtendableFenwickTree:
         return self.length
 
     def __repr__(self):
-        return f'{self.inner.frequencies()} => {[self.inner.prefix_sum(i) for i in range(1, len(self.inner) + 1)]}'
+        return f'{self.inner.frequencies()[:self.length]} => {[self.inner.prefix_sum(i) for i in range(1, self.length + 1)]}'

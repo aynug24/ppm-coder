@@ -2,6 +2,7 @@ from typing import Dict, Optional, List, Iterable, Tuple, Callable
 from fenwick import FenwickTree
 from fenwick_utils import ExtendableFenwickTree
 
+
 class LeftContextTree:
     SIGMA = 256
 
@@ -18,7 +19,7 @@ class LeftContextTree:
         self.pseudo_root.distribution = ExtendableFenwickTree(LeftContextTree.SIGMA)
         for c in range(LeftContextTree.SIGMA):
             self.pseudo_root.distribution.add(c, 1)
-        self.pseudo_root.children = {c: self.root for c in range(LeftContextTree.SIGMA)}
+        self.pseudo_root._children = {c: self.root for c in range(LeftContextTree.SIGMA)}
 
         self.root.parent = self.pseudo_root
 
@@ -27,6 +28,7 @@ class LeftContextTree:
         # self.current = self.root
 
     def encode(self, c) -> Iterable[Tuple[FenwickTree, int]]:
+        print(f'ENCODING {c} IN \'{self.left_ctx}\'')
         char_ctx = self._go_down(self.left_ctx)
 
         if not self.mask_seen_chars:
@@ -41,14 +43,9 @@ class LeftContextTree:
         else:
             raise NotImplementedError
 
-        if not self.exclude_short_ctx_from_update:
-            while char_ctx != self.pseudo_root:
-                char_ctx.add(c)
-                char_ctx = char_ctx.parent
-        else:
-            raise NotImplementedError
-
+        self._update_tree(self.left_ctx, c)
         self.left_ctx = self.left_ctx[-self.ctx_len + 1:] + c
+        print(f'ENCODED, CTX IS {self.left_ctx}')
 
     def decode(self, get_next_char: Callable[[FenwickTree], int]) -> Iterable[str]:
         decoded = []
@@ -69,22 +66,36 @@ class LeftContextTree:
             else:
                 raise NotImplementedError
 
-            if not self.exclude_short_ctx_from_update:
-                while current != self.pseudo_root:
-                    current.add(char)
-                    current = current.parent
-            else:
-                raise NotImplementedError
-
-            self.left_ctx = self.left_ctx[-self.ctx_len+1:] + char
+            self._update_tree(self.left_ctx, char)
+            self.left_ctx = self.left_ctx[-self.ctx_len + 1:] + char
 
     def _go_down(self, left_ctx):
         current = self.root
-        for c in reversed(left_ctx[-self.ctx_len:]):
-            child = current.children.get(c)
+        for c in reversed(left_ctx):
+            child = current.get_children().get(c)
             if child is None:
                 return current
+            current = child
         return current
+
+    def _extend_down(self, left_ctx):
+        current = self.root
+        for c in reversed(left_ctx):
+            child = current.get_children().get(c)
+            if child is None:
+                current = current.make_child(c)
+            else:
+                current = child
+        return current
+
+    def _update_tree(self, left_ctx, c):
+        current = self._extend_down(left_ctx)
+        if not self.exclude_short_ctx_from_update:
+            while current != self.pseudo_root:
+                current.add(c)
+                current = current.parent
+        else:
+            raise NotImplementedError
 
 
 class LeftContext:
@@ -92,7 +103,7 @@ class LeftContext:
 
     def __init__(self, parent: Optional['LeftContext']):
         self.parent = parent
-        self.children: Optional[Dict[str, 'LeftContext']] = None
+        self._children: Optional[Dict[str, 'LeftContext']] = None
 
         self.distribution = ExtendableFenwickTree(1)
         # todo init UP
@@ -111,3 +122,11 @@ class LeftContext:
             # todo not new char
             self.distribution.add(char_idx, 1)
 
+    def get_children(self):
+        self._children = self._children or {}
+        return self._children
+
+    def make_child(self, c):
+        child = LeftContext(self)
+        self.get_children()[c] = child
+        return child
