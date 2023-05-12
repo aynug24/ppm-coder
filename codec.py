@@ -4,10 +4,10 @@ from bit_number import BitNumberRange, DecoderWithRange
 import itertools
 
 class StatisticEncoder:
-    def __init__(self, iter_chars):
+    def __init__(self, iter_chars, coding_params):
         self.iter_chars = iter_chars
 
-        self.left_ctx_tree = LeftContextTree()
+        self.left_ctx_tree = LeftContextTree(coding_params)
         self.encoding_range = BitNumberRange()
 
     def encode(self) -> Iterable[int]:
@@ -18,11 +18,11 @@ class StatisticEncoder:
 
 
 class StatisticDecoder:
-    def __init__(self, iter_bits, length):
+    def __init__(self, iter_bits, length, coding_params):
         self.iter_bits = iter_bits
         self.length = length
 
-        self.left_ctx_tree = LeftContextTree()
+        self.left_ctx_tree = LeftContextTree(coding_params)
         self.decoding_range = DecoderWithRange(self.iter_bits)
 
     def decode(self) -> Iterable[str]:

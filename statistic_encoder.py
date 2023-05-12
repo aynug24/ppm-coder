@@ -1,15 +1,30 @@
 from typing import Dict, Optional, List, Iterable, Tuple, Callable
 from fenwick import FenwickTree
 from fenwick_utils import ExtendableFenwickTree
+from enum import Enum
+from dataclasses import dataclass
+
+
+class UpCharCodingAlrorithm(Enum):
+    A_ALWAYS_ONE = 1
+    B_OTHER_CHAR_COUNT = 2
+    C_PLUS_ONE_ON_NEW_CHAR = 3
+    D_PLUS_HALF_ON_NEW_CHAR = 4
+
+
+@dataclass
+class CodingParams:
+    context_length: int = 6
+    mask_seen: bool = False
+    exclude_on_update: bool = False
+    up_char_coding: UpCharCodingAlrorithm = UpCharCodingAlrorithm.A_ALWAYS_ONE
 
 
 class LeftContextTree:
     SIGMA = 256
 
-    def __init__(self, ctx_len=3, mask_seen_chars=False, exclude_short_ctx_from_update=False):
-        self.ctx_len = ctx_len
-        self.mask_seen_chars = mask_seen_chars
-        self.exclude_short_ctx_from_update = exclude_short_ctx_from_update
+    def __init__(self, coding_params):
+        self.coding_params = coding_params
 
         self.root = LeftContext(None)
 
@@ -31,7 +46,7 @@ class LeftContextTree:
         # print(f'ENCODING {c} IN \'{self.left_ctx}\'')
         char_ctx = self._go_down(self.left_ctx)
 
-        if not self.mask_seen_chars:
+        if not self.coding_params.mask_seen:
             encode_ctx = char_ctx
             while True:
                 char_idx = encode_ctx.chars_to_indices.get(c)
@@ -41,19 +56,30 @@ class LeftContextTree:
                 yield encode_ctx.distribution, encode_ctx.chars_to_indices[LeftContext.UP]
                 encode_ctx = encode_ctx.parent
         else:
-            raise NotImplementedError
+            encode_ctx = char_ctx
+            seen_chars = set()
+            while True:
+                masked_distribution, _, char_masked_idx = encode_ctx.distribution.without_chars(
+                    seen_chars, encode_ctx.chars_to_indices, find_char_idx=c)
+                if char_masked_idx is not None:
+                    yield masked_distribution, char_masked_idx
+                    break
+                yield masked_distribution, 0  # i give up using LeftCtx.UP, lets just write zero here
+                seen_chars |= encode_ctx.chars_to_indices.keys()
+                seen_chars.remove(LeftContext.UP)
+                encode_ctx = encode_ctx.parent
 
-        self._update_tree(self.left_ctx, c)
-        self.left_ctx = self.left_ctx[-self.ctx_len + 1:] + c
+        self._update_tree(self.left_ctx, c, encode_ctx)
+        self.left_ctx = self.left_ctx[-self.coding_params.context_length + 1:] + c
         # print(f'ENCODED, CTX IS {self.left_ctx}')
 
     def decode(self, get_next_char: Callable[[FenwickTree], int]) -> Iterable[str]:
         decoded = []
         while True:
-            current = self._go_down(self.left_ctx)
+            char_ctx = self._go_down(self.left_ctx)
 
-            if not self.mask_seen_chars:
-                encode_ctx = current
+            if not self.coding_params.mask_seen:
+                encode_ctx = char_ctx
                 while True:
                     char_idx = get_next_char(encode_ctx.distribution)
                     char = encode_ctx.indices_to_chars[char_idx]
@@ -64,10 +90,24 @@ class LeftContextTree:
                         yield char
                         break
             else:
-                raise NotImplementedError
+                encode_ctx = char_ctx
+                seen_chars = set()
+                while True:
+                    masked_distribution, masked_indices_to_ctx_indices, _ = encode_ctx.distribution.without_chars(
+                        seen_chars, encode_ctx.chars_to_indices)
+                    char_masked_idx = get_next_char(masked_distribution)
+                    char = encode_ctx.indices_to_chars[masked_indices_to_ctx_indices[char_masked_idx]]
+                    if char == LeftContext.UP:
+                        seen_chars |= encode_ctx.chars_to_indices.keys()
+                        seen_chars.remove(LeftContext.UP)
+                        encode_ctx = encode_ctx.parent
+                    else:
+                        decoded.append(char)
+                        yield char
+                        break
 
-            self._update_tree(self.left_ctx, char)
-            self.left_ctx = self.left_ctx[-self.ctx_len + 1:] + char
+            self._update_tree(self.left_ctx, char, encode_ctx)
+            self.left_ctx = self.left_ctx[-self.coding_params.context_length + 1:] + char
 
     def _go_down(self, left_ctx):
         current = self.root
@@ -88,14 +128,26 @@ class LeftContextTree:
                 current = child
         return current
 
-    def _update_tree(self, left_ctx, c):
+    def _update_tree(self, left_ctx, c, encoding_ctx):
         current = self._extend_down(left_ctx)
-        if not self.exclude_short_ctx_from_update:
+
+        if not self.coding_params.exclude_on_update:
+
             while current != self.pseudo_root:
-                current.add(c)
+                current.add(c, self.coding_params.up_char_coding)
                 current = current.parent
         else:
-            raise NotImplementedError
+
+            if current != encoding_ctx:
+                while current != encoding_ctx:
+                    current.add(c, self.coding_params.up_char_coding)
+                    current = current.parent
+            else:
+                while len(current.chars_to_indices) == 1 \
+                        or (
+                        len(current.chars_to_indices) == 2 and c in current.chars_to_indices):  # Only UP and char in ctx
+                    current.add(c, self.coding_params.up_char_coding)
+                    current = current.parent
 
 
 class LeftContext:
@@ -110,17 +162,48 @@ class LeftContext:
         self.distribution.add(0, 1)
         self.chars_to_indices = {LeftContext.UP: 0}
         self.indices_to_chars = {0: LeftContext.UP}
+        self.seen_once_chars = None  # for B Up encoding when assigning freq zero (which will prob break projections)
 
-    def add(self, c):
+    def add(self, c, up_char_coding: UpCharCodingAlrorithm):
         char_idx = self.chars_to_indices.get(c)
-        if char_idx is None:
+        if char_idx is None or (self.seen_once_chars is not None and c not in self.seen_once_chars):
             # todo new char
-            self.chars_to_indices[c] = len(self.chars_to_indices)
-            self.indices_to_chars[len(self.indices_to_chars)] = c
-            self.distribution.append(1)
+            if up_char_coding != UpCharCodingAlrorithm.B_OTHER_CHAR_COUNT:
+                self.chars_to_indices[c] = len(self.chars_to_indices)
+                self.indices_to_chars[len(self.indices_to_chars)] = c
+
+            if up_char_coding == UpCharCodingAlrorithm.A_ALWAYS_ONE:
+                self.distribution.append(1)
+            elif up_char_coding == UpCharCodingAlrorithm.B_OTHER_CHAR_COUNT:
+                self.seen_once_chars = self.seen_once_chars or set(self.chars_to_indices)
+                self.seen_once_chars.add(c)
+
+                self.distribution.add(self.chars_to_indices[LeftContext.UP], 1)
+            elif up_char_coding == UpCharCodingAlrorithm.C_PLUS_ONE_ON_NEW_CHAR:
+                self.distribution.append(1)
+                self.distribution.add(self.chars_to_indices[LeftContext.UP], 1)
+            elif up_char_coding == UpCharCodingAlrorithm.D_PLUS_HALF_ON_NEW_CHAR:
+                self.distribution.append(1)
+                self.distribution.add(self.chars_to_indices[LeftContext.UP], 1)
+            else:
+                raise Exception()
         else:
-            # todo not new char
-            self.distribution.add(char_idx, 1)
+            if up_char_coding == UpCharCodingAlrorithm.B_OTHER_CHAR_COUNT and \
+                    self.seen_once_chars is not None and c in self.seen_once_chars:
+
+                self.seen_once_chars.remove(c)
+                if self.seen_once_chars is None:
+                    self.seen_once_chars = None
+
+                char_idx = len(self.chars_to_indices)
+                self.chars_to_indices[c] = char_idx
+                self.indices_to_chars[char_idx] = c
+
+                self.distribution.append(1)
+            elif up_char_coding == UpCharCodingAlrorithm.D_PLUS_HALF_ON_NEW_CHAR:
+                self.distribution.add(char_idx, 2)
+            else:
+                self.distribution.add(char_idx, 1)
 
     def get_children(self):
         self._children = self._children or {}

@@ -18,56 +18,6 @@ def project_to_range(point, old_range_max, new_range_max):
 def project_back(point, old_range_max, new_range_max):
     return min(math.floor(point / old_range_max * new_range_max), new_range_max - 1)
 
-
-# def project_distribution_to_subrange(
-#         fenwick_distribution: FenwickTree,
-#         char_idx,
-#         coding_range_max,
-#         subrange_l,
-#         subrange_r):
-#     # todo одной проекцией
-#
-#     distribution_total = fenwick_distribution.prefix_sum(len(fenwick_distribution))
-#     distribution_low = fenwick_distribution.prefix_sum(char_idx)
-#     distribution_high = distribution_low + fenwick_distribution[char_idx]
-#
-#     if distribution_low == distribution_high:
-#         print('uhm')
-#         raise Exception()
-#
-#     coding_range_l = project_to_range(distribution_low, distribution_total, MAX)
-#     coding_range_r = project_to_range(distribution_high, distribution_total, MAX) - 1
-#
-#     # if coding_range_r - coding_range_l < 2 ** 60:
-#     #     print('uuuhm')
-#     #     raise Exception()
-#
-#     subrange_new_l = subrange_l + project_to_range(coding_range_l, MAX, subrange_r - subrange_l + 1)
-#     subrange_new_r = subrange_l + project_to_range(coding_range_r + 1, MAX, subrange_r - subrange_l + 1) - 1
-#
-#     return subrange_new_l, subrange_new_r
-#
-#
-# def project_subrange_to_distribution(subrange_point, subrange_l, subrange_r, fenwick_distribution: FenwickTree):
-#     coding_range_point = project_back(subrange_point, subrange_r - subrange_l + 1, MAX)
-#     distribution_point = project_back(coding_range_point, MAX,
-#                                           fenwick_distribution.prefix_sum(len(fenwick_distribution)))
-#
-#     left = 0
-#     right = len(fenwick_distribution) - 1
-#     result = -1
-#
-#     while left <= right:
-#         mid = (left + right) // 2
-#
-#         if fenwick_distribution.prefix_sum(mid) <= distribution_point:
-#             result = mid
-#             left = mid + 1
-#         else:
-#             right = mid - 1
-#
-#     return result
-
 def project_distribution_to_subrange(
         fenwick_distribution: FenwickTree,
         char_idx,
@@ -78,8 +28,7 @@ def project_distribution_to_subrange(
     distribution_high = distribution_low + fenwick_distribution[char_idx]
 
     if distribution_low == distribution_high:
-        print('uhm')
-        raise Exception()
+        raise Exception('uhm')
 
     subrange_new_l = subrange_l + project_to_range(distribution_low, distribution_total, subrange_r - subrange_l + 1)
     subrange_new_r = subrange_l + project_to_range(distribution_high, distribution_total, subrange_r - subrange_l + 1) - 1
@@ -88,24 +37,7 @@ def project_distribution_to_subrange(
 
 
 def project_subrange_to_distribution(subrange_point, subrange_l, subrange_r, fenwick_distribution: FenwickTree):
-    # distribution_point = project_back(subrange_point - subrange_l, subrange_r - subrange_l + 1,
-    #                                   fenwick_distribution.prefix_sum(len(fenwick_distribution)))
-    #
-    # left = 0
-    # right = len(fenwick_distribution) - 1
-    # result = -1
-    #
-    # while left <= right:
-    #     mid = (left + right) // 2
-    #
-    #     if fenwick_distribution.prefix_sum(mid) <= distribution_point:
-    #         result = mid
-    #         left = mid + 1
-    #     else:
-    #         right = mid - 1
     total = fenwick_distribution.prefix_sum(len(fenwick_distribution))
-    # distribution_point = project_back(subrange_point - subrange_l, subrange_r - subrange_l + 1,
-    #                                   fenwick_distribution.prefix_sum(len(fenwick_distribution)))
 
     left = 0
     right = len(fenwick_distribution) - 1
@@ -162,23 +94,6 @@ class DecoderWithRange:
         old_hidden_bits = self.number_range.hidden_bits
         common_range_prefix = self.number_range.project_probability_pop_prefix(fenwick_distribution, next_byte)
         self._move_window(old_hidden_bits, common_range_prefix)
-
-
-        # for _ in range(len(common_range_prefix)):
-        #     self.window = (2 * self.window + next(self.iter_bits)) % MAX
-        #
-        # if not self.number_range.low <= self.window <= self.number_range.high:
-        #     raise Exception()
-        # if self.window < 0:
-        #     raise Exception()
-        #
-        # for _ in range(self.number_range.hidden_bits):
-        #     self.window = 2 * self.window - 2 ** (N - 1) + next(self.iter_bits)
-        #
-        # if not self.number_range.low <= self.window <= self.number_range.high:
-        #     raise Exception()
-        # if self.window < 0:
-        #     raise Exception()
 
         # print(f'Found {next_byte}, window is {self.window}')
         return next_byte
@@ -245,13 +160,7 @@ class BitNumberRange:
 
         return common_prefix
 
-    # end exclusive, range_start = a, range_end = b + 1
     def _project_probability(self, fenwick_distribution: FenwickTree, char_idx):
-        # distribution_low = fenwick_distribution.prefix_sum(char_idx)
-        #
-        # current_length = self.high - self.low
-        # self.low = self.low + math.ceil(range_start / BitNumberRange.MAX * current_length)
-        # self.high = self.high + math.ceil(range_end / BitNumberRange.MAX * current_length) - 1
         (self.low, self.high) = project_distribution_to_subrange(
             fenwick_distribution, char_idx, self.low, self.high)
 

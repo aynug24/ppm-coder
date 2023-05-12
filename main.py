@@ -5,36 +5,34 @@ import argparse
 import os
 from dataclasses import dataclass
 from codec import StatisticEncoder, StatisticDecoder
-
+from statistic_encoder import CodingParams, UpCharCodingAlrorithm
+import itertools
 
 @dataclass
 class Header:
     # little-endian 8b us, 1b us, 1b us, 1b us
-    STRUCT_FMT = '< Q B B B'
+    STRUCT_FMT = '< Q B B B B'
 
     length: int
-    ctx_len: int
-    mask: bool
-    exclude: bool
+    coding_params: CodingParams
 
     @staticmethod
     def header_length():
         return struct.calcsize(Header.STRUCT_FMT)
 
     def serialize(self):
-        return struct.pack(Header.STRUCT_FMT, self.length, self.ctx_len, self.mask, self.exclude)
+        return struct.pack(
+            Header.STRUCT_FMT,
+            self.length,
+            self.coding_params.context_length,
+            self.coding_params.mask_seen,
+            self.coding_params.exclude_on_update,
+            self.coding_params.up_char_coding.value)
 
     @staticmethod
     def deserialize(bytes):
-        (length, ctx_len, mask, exclude) = struct.unpack(Header.STRUCT_FMT, bytes)
-        return Header(length, ctx_len, mask > 0, exclude > 0)
-
-
-@dataclass
-class CodingParams:
-    context_length: int = 6
-    mask_seen: bool = False
-    exclude_on_update: bool = False
+        (length, ctx_len, mask, exclude, up_char_coding) = struct.unpack(Header.STRUCT_FMT, bytes)
+        return Header(length, CodingParams(ctx_len, mask > 0, exclude > 0, UpCharCodingAlrorithm(up_char_coding)))
 
 
 def iter_bits(f, chunk_size=5 * 1024):
@@ -72,8 +70,8 @@ def write_bits(iter_bits, f, chunk_size=5 * 1024):
             bits.tofile(f)
             bits.clear()
 
-        if len(res) % 80000 == 0:
-            print(f'Written {len(res) / 8} bytes of 500k')
+        # if len(res) % 80000 == 0:
+        #     print(f'Written {len(res) / 8} bytes of 500k')
 
     bits.tofile(f)
 
@@ -94,8 +92,8 @@ def write_chars(iter_chars, f, chunk_size=5 * 1024):
         if i % chunk_size == chunk_size - 1:
             f.write(''.join(chars))
 
-        if i % 10000 == 0:
-            print(f'Written {i} chars of 1.7 mil')
+        # if i % 10000 == 0:
+        #     print(f'Written {i} chars of 1.7 mil')
 
     f.write(''.join(chars[: (i + 1) % chunk_size]))
 
@@ -107,12 +105,11 @@ def zip(source_file, dest_file=None, coding_params: CodingParams = CodingParams(
     dest_file = dest_file or f'{source_file}.myzip'
 
     source_length = os.path.getsize(source_file)  # race condition, also not sure about precision
-    header = Header(
-        source_length, coding_params.context_length, coding_params.mask_seen, coding_params.exclude_on_update)
+    header = Header(source_length, coding_params)
     with open(source_file, mode='r', encoding='iso-8859-1', newline='') as input_f, \
             open(dest_file, mode='wb') as dest_f:
         dest_f.write(header.serialize())
-        encoder = StatisticEncoder(iter_chars(input_f))
+        encoder = StatisticEncoder(iter_chars(input_f), coding_params)
         write_bits(encoder.encode(), dest_f)
 
 
@@ -123,7 +120,7 @@ def unzip(source_file, dest_file=None):
     with open(source_file, mode='rb') as input_f, \
             open(dest_file, mode='w', encoding='iso-8859-1', newline='') as dest_f:
         header = Header.deserialize(input_f.read(Header.header_length()))
-        decoder = StatisticDecoder(iter_bits(input_f), header.length)
+        decoder = StatisticDecoder(iter_bits(input_f), header.length, header.coding_params)
         write_chars(decoder.decode(), dest_f)
 
 
@@ -144,47 +141,56 @@ def console_app():
     elif args.mode == 'unzip':
         unzip(args.source_file, args.dest_file)
 
-def test(f_name):
+def test(f_name, coding_params=None):
     f_name = f'tests/{f_name}'
 
-    zip(f_name, f'{f_name}.zip', CodingParams(context_length=6, mask_seen=False, exclude_on_update=False))
-    unzip(f'{f_name}.zip', f'{f_name}.unzipped')
+    params = itertools.product(
+        [4, 5, 6],  # ctx_len
+        [False, True],  # mask
+        [False, True],  # exclude from upd
+        list(UpCharCodingAlrorithm)
+    )
 
-    with open(f_name, mode='r', encoding='iso-8859-1') as original_f:
-        with open(f'{f_name}.unzipped', mode='r', encoding='iso-8859-1') as unzipped_f:
-            original = original_f.read()
-            unzipped = unzipped_f.read()
-            if original != unzipped:
-                print('Files texts differ')
-                raise AssertionError()
-            else:
-                print(f'PASSED TEXTS: {f_name}')
+    for ctx_len, mask, exclude, up_coding in params if coding_params is None else [coding_params]:
+        coding_params = CodingParams(ctx_len, mask, exclude, up_coding)
+        zip(f_name, f'{f_name}.zip', coding_params)
+        unzip(f'{f_name}.zip', f'{f_name}.unzipped')
 
-    with open(f_name, mode='rb') as original_f:
-        with open(f'{f_name}.unzipped', mode='rb') as unzipped_f:
-            original = original_f.read()
-            unzipped = unzipped_f.read()
-            if original != unzipped:
-                print('Files binaries differ')
-                raise AssertionError()
-            else:
-                print(f'PASSED TEXTS: {f_name}')
+        with open(f_name, mode='r', encoding='iso-8859-1') as original_f:
+            with open(f'{f_name}.unzipped', mode='r', encoding='iso-8859-1') as unzipped_f:
+                original = original_f.read()
+                unzipped = unzipped_f.read()
+                if original != unzipped:
+                    print('Files texts differ')
+                    raise AssertionError()
+
+        with open(f_name, mode='rb') as original_f:
+            with open(f'{f_name}.unzipped', mode='rb') as unzipped_f:
+                original = original_f.read()
+                unzipped = unzipped_f.read()
+                if original != unzipped:
+                    print('Files binaries differ')
+                    raise AssertionError()
+
+        print(f'Passed {ctx_len}, {mask}, {exclude}, {up_coding} for {f_name}')
+    print(f'PASSED ALL FOR {f_name}')
 
 if __name__ == '__main__':
     # console_app()
 
-    test('empty.txt')
-    test('a.txt')
-    test('aaaaaa.txt')
-    test('test.txt')
-    test('aca.txt')
-    test('acag.txt')
-    test('acagaatagaga.txt')
-    test('accaccggacca.txt')
-    test('v dver\' vozli medvedica s medvejonkom.txt')
-    test('a_n_b_n.txt')
-    test('a_rn_b.txt')
-    test('Martin, George RR - Ice and Fire 4 - A Feast for Crows.txt')
+    # test('empty.txt')
+    # test('a.txt')
+    # test('aaaaaa.txt')
+    # test('test.txt') # (3, True, False, UpCharCodingAlrorithm.A_ALWAYS_ONE))
+    # test('aca.txt')
+    # test('acag.txt')
+    # test('acagaatagaga.txt')
+    # test('accaccggacca.txt')
+    # test('v dver\' vozli medvedica s medvejonkom.txt')
+    # test('a_n_b_n.txt')
+    # test('a_rn_b.txt')
+    # test('Martin, George RR - Ice and Fire 4 - A Feast for Crows.txt')
+    test('Mini-Martin.txt')
 
 # if __name__ == '__main__':
 #     pass
