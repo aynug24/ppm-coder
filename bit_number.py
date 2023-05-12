@@ -3,7 +3,7 @@ import itertools
 from fenwick import FenwickTree
 from typing import List
 
-N = 14
+N = 64
 MAX = 2 ** N
 
 HIDE_BITS_IF_LOW_GTE = 2 ** (N - 2)
@@ -88,8 +88,24 @@ def project_distribution_to_subrange(
 
 
 def project_subrange_to_distribution(subrange_point, subrange_l, subrange_r, fenwick_distribution: FenwickTree):
-    distribution_point = project_back(subrange_point, subrange_r - subrange_l + 1,
-                                      fenwick_distribution.prefix_sum(len(fenwick_distribution)))
+    # distribution_point = project_back(subrange_point - subrange_l, subrange_r - subrange_l + 1,
+    #                                   fenwick_distribution.prefix_sum(len(fenwick_distribution)))
+    #
+    # left = 0
+    # right = len(fenwick_distribution) - 1
+    # result = -1
+    #
+    # while left <= right:
+    #     mid = (left + right) // 2
+    #
+    #     if fenwick_distribution.prefix_sum(mid) <= distribution_point:
+    #         result = mid
+    #         left = mid + 1
+    #     else:
+    #         right = mid - 1
+    total = fenwick_distribution.prefix_sum(len(fenwick_distribution))
+    # distribution_point = project_back(subrange_point - subrange_l, subrange_r - subrange_l + 1,
+    #                                   fenwick_distribution.prefix_sum(len(fenwick_distribution)))
 
     left = 0
     right = len(fenwick_distribution) - 1
@@ -98,7 +114,7 @@ def project_subrange_to_distribution(subrange_point, subrange_l, subrange_r, fen
     while left <= right:
         mid = (left + right) // 2
 
-        if fenwick_distribution.prefix_sum(mid) <= distribution_point:
+        if project_to_range(fenwick_distribution.prefix_sum(mid), total, subrange_r - subrange_l + 1) <= subrange_point - subrange_l:
             result = mid
             left = mid + 1
         else:
@@ -136,20 +152,48 @@ class DecoderWithRange:
 
     # next_byte_distribution: [124, 864, 1045, ..., 2^N]
     def get_next_char_idx(self, fenwick_distribution):
-        print(f'Finding {self.window} of {self.number_range.__repr__()} in {fenwick_distribution.__repr__()}')
+        if self.window < 0:
+            raise Exception()
+        # print(f'Finding {self.window} of {self.number_range.__repr__()} in {fenwick_distribution.__repr__()}')
         next_byte = project_subrange_to_distribution(
             self.window, self.number_range.low, self.number_range.high,
             fenwick_distribution)  # self.binsearch_byte_from_distr(self.window, fenwick_distribution)
-        common_range_prefix = self.number_range.project_probability_pop_prefix(fenwick_distribution, next_byte)
 
-        for _ in range(len(common_range_prefix)):
+        old_hidden_bits = self.number_range.hidden_bits
+        common_range_prefix = self.number_range.project_probability_pop_prefix(fenwick_distribution, next_byte)
+        self._move_window(old_hidden_bits, common_range_prefix)
+
+
+        # for _ in range(len(common_range_prefix)):
+        #     self.window = (2 * self.window + next(self.iter_bits)) % MAX
+        #
+        # if not self.number_range.low <= self.window <= self.number_range.high:
+        #     raise Exception()
+        # if self.window < 0:
+        #     raise Exception()
+        #
+        # for _ in range(self.number_range.hidden_bits):
+        #     self.window = 2 * self.window - 2 ** (N - 1) + next(self.iter_bits)
+        #
+        # if not self.number_range.low <= self.window <= self.number_range.high:
+        #     raise Exception()
+        # if self.window < 0:
+        #     raise Exception()
+
+        # print(f'Found {next_byte}, window is {self.window}')
+        return next_byte
+
+    def _move_window(self, old_hidden_bits, common_prefix):
+        if len(common_prefix) == 0:
+            for _ in range(self.number_range.hidden_bits - old_hidden_bits):
+                self.window = 2 * self.window - 2 ** (N - 1) + next(self.iter_bits)
+            return
+
+        for _ in range(len(common_prefix) - old_hidden_bits):
             self.window = (2 * self.window + next(self.iter_bits)) % MAX
 
         for _ in range(self.number_range.hidden_bits):
             self.window = 2 * self.window - 2 ** (N - 1) + next(self.iter_bits)
-
-        print(f'Found {next_byte}, window is {self.window}')
-        return next_byte
 
 
 # Not worrying about overflow; instead worrying about performance :)
@@ -161,23 +205,23 @@ class BitNumberRange:
         self.hidden_bits = 0
 
     def project_probability_pop_prefix(self, fenwick_distribution, char_idx) -> List[int]:
-        print()
-        print(f'Before encoding {char_idx} in {fenwick_distribution.__repr__()}:')
-        print(self.__repr__())
+        # print()
+        # print(f'Before encoding {char_idx} in {fenwick_distribution.__repr__()}:')
+        # print(self.__repr__())
         self._project_probability(fenwick_distribution, char_idx)
         if not 0 <= self.low < self.high < MAX:
             raise Exception()
-        print(f'After projecting dist:')
-        print(self.__repr__())
+        # print(f'After projecting dist:')
+        # print(self.__repr__())
         common_prefix = self._pop_common_prefix()
-        print(f'After popping common prefix:')
-        print(self.__repr__())
+        # print(f'After popping common prefix:')
+        # print(self.__repr__())
         self._hide_bits()
         if not 0 <= self.low < self.high < MAX:
             raise Exception()
 
-        print(f'After hiding bits:')
-        print(self.__repr__())
+        # print(f'After hiding bits:')
+        # print(self.__repr__())
         return common_prefix
 
     def get_nonzero_prefix_from_range(self):

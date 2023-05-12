@@ -28,7 +28,7 @@ class LeftContextTree:
         # self.current = self.root
 
     def encode(self, c) -> Iterable[Tuple[FenwickTree, int]]:
-        print(f'ENCODING {c} IN \'{self.left_ctx}\'')
+        # print(f'ENCODING {c} IN \'{self.left_ctx}\'')
         char_ctx = self._go_down(self.left_ctx)
 
         if not self.mask_seen_chars:
@@ -45,7 +45,7 @@ class LeftContextTree:
 
         self._update_tree(self.left_ctx, c)
         self.left_ctx = self.left_ctx[-self.ctx_len + 1:] + c
-        print(f'ENCODED, CTX IS {self.left_ctx}')
+        # print(f'ENCODED, CTX IS {self.left_ctx}')
 
     def decode(self, get_next_char: Callable[[FenwickTree], int]) -> Iterable[str]:
         decoded = []

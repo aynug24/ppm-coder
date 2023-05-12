@@ -72,10 +72,13 @@ def write_bits(iter_bits, f, chunk_size=5 * 1024):
             bits.tofile(f)
             bits.clear()
 
+        if len(res) % 80000 == 0:
+            print(f'Written {len(res) / 8} bytes of 500k')
+
     bits.tofile(f)
 
-    print('WRITTEN BITS:')
-    print(''.join(map(str, res)))
+    # print('WRITTEN BITS:')
+    # print(''.join(map(str, res)))
 
 
 def write_chars(iter_chars, f, chunk_size=5 * 1024):
@@ -91,10 +94,13 @@ def write_chars(iter_chars, f, chunk_size=5 * 1024):
         if i % chunk_size == chunk_size - 1:
             f.write(''.join(chars))
 
+        if i % 10000 == 0:
+            print(f'Written {i} chars of 1.7 mil')
+
     f.write(''.join(chars[: (i + 1) % chunk_size]))
 
-    print('WRITTEN CHARS:')
-    print(''.join(res))
+    # print('WRITTEN CHARS:')
+    # print(''.join(res))
 
 
 def zip(source_file, dest_file=None, coding_params: CodingParams = CodingParams()):
@@ -103,7 +109,7 @@ def zip(source_file, dest_file=None, coding_params: CodingParams = CodingParams(
     source_length = os.path.getsize(source_file)  # race condition, also not sure about precision
     header = Header(
         source_length, coding_params.context_length, coding_params.mask_seen, coding_params.exclude_on_update)
-    with open(source_file, mode='r', encoding='iso-8859-1') as input_f, \
+    with open(source_file, mode='r', encoding='iso-8859-1', newline='') as input_f, \
             open(dest_file, mode='wb') as dest_f:
         dest_f.write(header.serialize())
         encoder = StatisticEncoder(iter_chars(input_f))
@@ -115,7 +121,7 @@ def unzip(source_file, dest_file=None):
         dest_file = dest_file[:-(len('.myzip'))] if source_file.endswith('.myzip') else f'{source_file}.original'
 
     with open(source_file, mode='rb') as input_f, \
-            open(dest_file, mode='w', encoding='iso-8859-1') as dest_f:
+            open(dest_file, mode='w', encoding='iso-8859-1', newline='') as dest_f:
         header = Header.deserialize(input_f.read(Header.header_length()))
         decoder = StatisticDecoder(iter_bits(input_f), header.length)
         write_chars(decoder.decode(), dest_f)
@@ -141,7 +147,7 @@ def console_app():
 def test(f_name):
     f_name = f'tests/{f_name}'
 
-    zip(f_name, f'{f_name}.zip', CodingParams(context_length=3, mask_seen=False, exclude_on_update=False))
+    zip(f_name, f'{f_name}.zip', CodingParams(context_length=6, mask_seen=False, exclude_on_update=False))
     unzip(f'{f_name}.zip', f'{f_name}.unzipped')
 
     with open(f_name, mode='r', encoding='iso-8859-1') as original_f:
@@ -149,18 +155,36 @@ def test(f_name):
             original = original_f.read()
             unzipped = unzipped_f.read()
             if original != unzipped:
-                print('Files differ')
+                print('Files texts differ')
                 raise AssertionError()
             else:
-                print(f'PASSED: {f_name}')
+                print(f'PASSED TEXTS: {f_name}')
+
+    with open(f_name, mode='rb') as original_f:
+        with open(f'{f_name}.unzipped', mode='rb') as unzipped_f:
+            original = original_f.read()
+            unzipped = unzipped_f.read()
+            if original != unzipped:
+                print('Files binaries differ')
+                raise AssertionError()
+            else:
+                print(f'PASSED TEXTS: {f_name}')
 
 if __name__ == '__main__':
     # console_app()
 
-    # test('empty.txt')
-    # test('a.txt')
-    # test('aaaaaa.txt')
+    test('empty.txt')
+    test('a.txt')
+    test('aaaaaa.txt')
     test('test.txt')
+    test('aca.txt')
+    test('acag.txt')
+    test('acagaatagaga.txt')
+    test('accaccggacca.txt')
+    test('v dver\' vozli medvedica s medvejonkom.txt')
+    test('a_n_b_n.txt')
+    test('a_rn_b.txt')
+    test('Martin, George RR - Ice and Fire 4 - A Feast for Crows.txt')
 
 # if __name__ == '__main__':
 #     pass
