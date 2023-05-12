@@ -18,6 +18,7 @@ class CodingParams:
     mask_seen: bool = False
     exclude_on_update: bool = False
     up_char_coding: UpCharCodingAlrorithm = UpCharCodingAlrorithm.A_ALWAYS_ONE
+    decapitalize: bool = True
 
 
 class LeftContextTree:

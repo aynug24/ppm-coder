@@ -14,10 +14,6 @@ def project_to_range(point, old_range_max, new_range_max):
     return min(math.ceil(point / old_range_max * new_range_max), new_range_max - 1)
 
 
-# uuuggh???
-def project_back(point, old_range_max, new_range_max):
-    return min(math.floor(point / old_range_max * new_range_max), new_range_max - 1)
-
 def project_distribution_to_subrange(
         fenwick_distribution: FenwickTree,
         char_idx,
