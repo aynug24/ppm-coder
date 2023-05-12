@@ -133,20 +133,24 @@ class LeftContextTree:
         current = self._extend_down(left_ctx)
 
         if not self.coding_params.exclude_on_update:
-
-            while current != self.pseudo_root:
+            while True:
                 current.add(c, self.coding_params.up_char_coding)
                 current = current.parent
+                if current == self.pseudo_root:
+                    break
         else:
 
             if current != encoding_ctx:
-                while current != encoding_ctx:
+                while True:
                     current.add(c, self.coding_params.up_char_coding)
+                    if current == encoding_ctx:
+                        break
                     current = current.parent
             else:
-                while len(current.chars_to_indices) == 1 \
-                        or (
-                        len(current.chars_to_indices) == 2 and c in current.chars_to_indices):  # Only UP and char in ctx
+                while True:
+                    char_count = current.get_char_count()
+                    if not (char_count == 0 or char_count == 1 and current.contains(c)):
+                        break
                     current.add(c, self.coding_params.up_char_coding)
                     current = current.parent
 
@@ -168,7 +172,7 @@ class LeftContext:
     def add(self, c, up_char_coding: UpCharCodingAlrorithm):
         char_idx = self.chars_to_indices.get(c)
         if char_idx is None or (self.seen_once_chars is not None and c not in self.seen_once_chars):
-            # todo new char
+
             if up_char_coding != UpCharCodingAlrorithm.B_OTHER_CHAR_COUNT:
                 self.chars_to_indices[c] = len(self.chars_to_indices)
                 self.indices_to_chars[len(self.indices_to_chars)] = c
@@ -189,6 +193,7 @@ class LeftContext:
             else:
                 raise Exception()
         else:
+
             if up_char_coding == UpCharCodingAlrorithm.B_OTHER_CHAR_COUNT and \
                     self.seen_once_chars is not None and c in self.seen_once_chars:
 
@@ -209,6 +214,12 @@ class LeftContext:
     def get_children(self):
         self._children = self._children or {}
         return self._children
+
+    def get_char_count(self):
+        return len(self.chars_to_indices) + (len(self.seen_once_chars) if self.seen_once_chars is not None else 0) - 1
+
+    def contains(self, char):
+        return char in self.chars_to_indices or (self.seen_once_chars is not None and char in self.seen_once_chars)
 
     def make_child(self, c):
         child = LeftContext(self)

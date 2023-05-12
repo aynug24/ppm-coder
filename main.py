@@ -3,13 +3,15 @@ from fenwick import FenwickTree
 from bitarray import bitarray
 import argparse
 import os
+import dataclasses
 from dataclasses import dataclass
 from codec import StatisticEncoder, StatisticDecoder
 from statistic_encoder import CodingParams, UpCharCodingAlrorithm
 import itertools
 from capitalization import get_cap_data, capitalize_iter, CapitalizationData, ProperName, decapitalize_iter
 from ternary_encoding import encode_numbers, decode_numbers
-from typing import Iterator, List
+from typing import Iterator, List, Iterable
+from benchmark import benchmark_all_params
 
 
 def bits_to_bytes(iter_bits: Iterator[int]) -> bytes:
@@ -59,7 +61,7 @@ class CapitalizationHeader:
         (proper_names, rule_exceptions) = (self.cap_data.proper_names, self.cap_data.rule_exceptions)
         serialized = []
         serialized.append(struct.pack(CapitalizationHeader.LENGTHS_FMT, len(proper_names), len(rule_exceptions)))
-        serialized.extend(self._encode_proper_name(pn) for pn in proper_names)
+        serialized.extend(self._encode_proper_names(proper_names))
         serialized.append(self._encode_exceptions(rule_exceptions))
         return b''.join(serialized)
 
@@ -68,6 +70,13 @@ class CapitalizationHeader:
         if '\0' in s:
             raise Exception('No zero byte in proper names, please')
         return s.encode('iso-8859-1') + b'\0'
+
+    def _encode_proper_names(self, proper_names: List[ProperName]) -> Iterable[bytes]:
+        sorted_names = list(sorted(proper_names, key=lambda pn: pn.from_pos))
+        for i in range(len(sorted_names) - 1, 0, -1):
+            sorted_names[i] = dataclasses.replace(
+                sorted_names[i], from_pos=sorted_names[i].from_pos - sorted_names[i - 1].from_pos)
+        return (self._encode_proper_name(proper_name) for proper_name in sorted_names)
 
     def _encode_proper_name(self, proper_name: ProperName) -> bytes:
         name_bytes = self._encode_string(proper_name.word)
@@ -106,6 +115,10 @@ class CapitalizationHeader:
             word = CapitalizationHeader._read_string(f)
             from_pos = next(decode_numbers(iter_bits(f, chunk_size=1)))  # сильно опирающийся на ленивость код
             proper_names.append(ProperName(word, from_pos))
+
+        for i in range(1, len(proper_names)):
+            proper_names[i] = dataclasses.replace(
+                proper_names[i], from_pos=proper_names[i].from_pos + proper_names[i - 1].from_pos)
         return proper_names
 
     @staticmethod
@@ -120,8 +133,6 @@ def iter_bits(f, chunk_size=5 * 1024):
     read_eof = False
     bits = bitarray(0, endian='big')
     while not read_eof:
-        # bytes = f.read(chunk_size)
-
         try:
             bits.fromfile(f, chunk_size)
         except EOFError:
@@ -140,46 +151,26 @@ def iter_chars(f, chunk_size=5 * 1024):
 
 
 def write_bits(iter_bits, f, chunk_size=5 * 1024):
-    # TODO DELETE
-    res = []
-
     bits = bitarray(0, endian='big')
     for bit in iter_bits:
-        res.append(bit)
         bits.append(bit)
         if len(bits) == 8 * chunk_size:
             bits.tofile(f)
             bits.clear()
 
-        # if len(res) % 80000 == 0:
-        #     print(f'Written {len(res) / 8} bytes of 500k')
-
     bits.tofile(f)
-
-    # print('WRITTEN BITS:')
-    # print(''.join(map(str, res)))
 
 
 def write_chars(iter_chars, f, chunk_size=5 * 1024):
-    # TODO DELETE
-    res = []
-
     chars = [''] * chunk_size
 
     i = -1
     for i, char in enumerate(iter_chars):
-        res.append(char)
         chars[i % chunk_size] = char
         if i % chunk_size == chunk_size - 1:
             f.write(''.join(chars))
 
-        # if i % 10000 == 0:
-        #     print(f'Written {i} chars of 1.7 mil')
-
     f.write(''.join(chars[: (i + 1) % chunk_size]))
-
-    # print('WRITTEN CHARS:')
-    # print(''.join(res))
 
 
 def zip(source_file, dest_file=None, coding_params: CodingParams = CodingParams()):
@@ -207,7 +198,7 @@ def zip(source_file, dest_file=None, coding_params: CodingParams = CodingParams(
 
 def unzip(source_file, dest_file=None):
     if dest_file is None:
-        dest_file = dest_file[:-(len('.myzip'))] if source_file.endswith('.myzip') else f'{source_file}.original'
+        dest_file = source_file[:-(len('.myzip'))] if source_file.endswith('.myzip') else f'{source_file}.original'
 
     with open(source_file, mode='rb') as input_f, \
             open(dest_file, mode='w', encoding='iso-8859-1', newline='') as dest_f:
@@ -284,20 +275,45 @@ def test(f_name, coding_params=None):
 if __name__ == '__main__':
     # console_app()
 
-    # test('empty.txt')
-    # test('a.txt')
-    # test('B.txt')
-    # test('BB.txt')
-    # test('BBB.txt')
-    # test('B. B.txt')
-    # test('aaaaaa.txt')
-    # test('test.txt') # (3, True, False, UpCharCodingAlrorithm.A_ALWAYS_ONE))
-    # test('aca.txt')
-    # test('acag.txt')
-    # test('acagaatagaga.txt')
-    # test('accaccggacca.txt')
-    # test('v dver\' vozli medvedica s medvejonkom.txt')
-    # test('a_n_b_n.txt')
-    # test('a_rn_b.txt')
-    test('Martin, George RR - Ice and Fire 4 - A Feast for Crows.txt', (3, True, True, UpCharCodingAlrorithm.A_ALWAYS_ONE, True))
-    # test('Mini-Martin.txt')
+    # params = itertools.product(
+    #     [4, 5, 6],  # ctx_len
+    #     [False, True],  # mask
+    #     [False, True],  # exclude from upd
+    #     list(UpCharCodingAlrorithm),  # up encoding algo
+    #     [False, True]  # decapitalize
+    # )
+
+    params = itertools.product(
+        [5],  # ctx_len
+        [False, True],  # mask
+        [False, True],  # exclude from upd
+        [UpCharCodingAlrorithm.D_PLUS_HALF_ON_NEW_CHAR],  # up encoding algo
+        [False, True]  # decapitalize
+    )
+
+    coding_params = [
+        CodingParams(ctx_len, mask, exclude, up_coding, decapitalize)
+        for ctx_len, mask, exclude, up_coding, decapitalize in params
+    ]
+
+    benchmark_all_params(zip, unzip, 'tests/Martin, George RR - Ice and Fire 4 - A Feast for Crows.txt', coding_params)
+
+    test('empty.txt')
+    test('a.txt')
+    test('B.txt')
+    test('BB.txt')
+    test('BBB.txt')
+    test('B. B.txt')
+    test('aaaaaa.txt')
+    test('test.txt') # (3, True, False, UpCharCodingAlrorithm.A_ALWAYS_ONE))
+    test('aca.txt')
+    test('acag.txt')
+    test('acagaatagaga.txt')
+    test('accaccggacca.txt')
+    test('v dver\' vozli medvedica s medvejonkom.txt')
+    test('a_n_b_n.txt')
+    test('a_rn_b.txt')
+    # loop(5)
+    # test('Martin, George RR - Ice and Fire 4 - A Feast for Crows.txt',
+    #      (6, True, True, UpCharCodingAlrorithm.D_PLUS_HALF_ON_NEW_CHAR, False))
+    test('Mini-Martin.txt')
