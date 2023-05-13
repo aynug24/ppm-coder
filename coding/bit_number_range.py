@@ -27,7 +27,8 @@ def project_distribution_to_subrange(
         raise Exception('uhm')
 
     subrange_new_l = subrange_l + project_to_range(distribution_low, distribution_total, subrange_r - subrange_l + 1)
-    subrange_new_r = subrange_l + project_to_range(distribution_high, distribution_total, subrange_r - subrange_l + 1) - 1
+    subrange_new_r = subrange_l + project_to_range(distribution_high, distribution_total,
+                                                   subrange_r - subrange_l + 1) - 1
 
     return subrange_new_l, subrange_new_r
 
@@ -42,7 +43,8 @@ def project_subrange_to_distribution(subrange_point, subrange_l, subrange_r, fen
     while left <= right:
         mid = (left + right) // 2
 
-        if project_to_range(fenwick_distribution.prefix_sum(mid), total, subrange_r - subrange_l + 1) <= subrange_point - subrange_l:
+        if project_to_range(fenwick_distribution.prefix_sum(mid), total,
+                            subrange_r - subrange_l + 1) <= subrange_point - subrange_l:
             result = mid
             left = mid + 1
         else:
@@ -65,34 +67,20 @@ class DecoderWithRange:
         self.number_range = BitNumberRange()
         self.window = int(''.join(map(str, itertools.islice(self.iter_bits, N))), 2)
 
-    def binsearch_byte_from_distr(self, window_number, fenwick_distribution):
-        l = 0
-        r = len(fenwick_distribution) - 1
-
-        while l <= r:
-            mid = (l + r) // 2
-            if fenwick_distribution.prefix_sum(mid) > window_number:
-                r = mid - 1
-            else:
-                l = mid + 1
-
-        return l
-
-    # next_byte_distribution: [124, 864, 1045, ..., 2^N]
     def get_next_char_idx(self, fenwick_distribution):
         if self.window < 0:
             raise Exception()
         # print(f'Finding {self.window} of {self.number_range.__repr__()} in {fenwick_distribution.__repr__()}')
-        next_byte = project_subrange_to_distribution(
+        next_char_idx = project_subrange_to_distribution(
             self.window, self.number_range.low, self.number_range.high,
-            fenwick_distribution)  # self.binsearch_byte_from_distr(self.window, fenwick_distribution)
+            fenwick_distribution)
 
         old_hidden_bits = self.number_range.hidden_bits
-        common_range_prefix = self.number_range.project_probability_pop_prefix(fenwick_distribution, next_byte)
+        common_range_prefix = self.number_range.project_probability_pop_prefix(fenwick_distribution, next_char_idx)
         self._move_window(old_hidden_bits, common_range_prefix)
 
-        # print(f'Found {next_byte}, window is {self.window}')
-        return next_byte
+        # print(f'Found {next_char_idx}, window is {self.window}')
+        return next_char_idx
 
     def _move_window(self, old_hidden_bits, common_prefix):
         if len(common_prefix) == 0:
@@ -116,30 +104,23 @@ class BitNumberRange:
         self.hidden_bits = 0
 
     def project_probability_pop_prefix(self, fenwick_distribution, char_idx) -> List[int]:
-        # print()
         # print(f'Before encoding {char_idx} in {fenwick_distribution.__repr__()}:')
-        # print(self.__repr__())
         self._project_probability(fenwick_distribution, char_idx)
         if not 0 <= self.low < self.high < MAX:
             raise Exception()
-        # print(f'After projecting dist:')
-        # print(self.__repr__())
+
         common_prefix = self._pop_common_prefix()
-        # print(f'After popping common prefix:')
-        # print(self.__repr__())
         self._hide_bits()
         if not 0 <= self.low < self.high < MAX:
             raise Exception()
 
-        # print(f'After hiding bits:')
-        # print(self.__repr__())
         return common_prefix
 
     def get_nonzero_prefix_from_range(self):
         self.hidden_bits = 0
         return [1]  # 10000000...000000 = 2 ** (N - 1) is always in range
 
-    # returns [1, 0, 1, 1, 0, 1, ...]
+    # returns bits: [1, 0, 1, 1, 0, 1, ...]
     def _pop_common_prefix(self) -> List[int]:
         common_prefix = []
 

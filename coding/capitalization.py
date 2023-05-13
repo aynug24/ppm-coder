@@ -1,3 +1,5 @@
+# из д/з 2
+
 from typing import TypeVar, Generic, List, Optional, Tuple, Set, Dict, Union, Iterable
 from dataclasses import dataclass
 from collections import deque
@@ -166,7 +168,7 @@ class ProperNameCapitalsAutomaton:
             self._ring_buf.set_by_pointer(word_buffer_ptr, None)
             del self._word_to_buffer_ptr[word]
 
-    def __init__(self, buffer_size=10000, proper_name_threshold=10):
+    def __init__(self, buffer_size=100, proper_name_threshold=10):
         self._proper_names: Dict[str, int] = {}
         self._name_candidates_cache = ProperNameCapitalsAutomaton._NameCandidatesCache(buffer_size,
                                                                                        proper_name_threshold,
@@ -245,10 +247,10 @@ class CapitalizationData:
 
 
 class Decapitalizer:
-    def __init__(self, B, P):
+    def __init__(self):
         self._consecutive_capitals_automaton = ConsecutiveCapitalsAutomaton()
         self._sentence_start_automaton = SentenceStartCapitalsAutomaton()
-        self._proper_names_automaton = ProperNameCapitalsAutomaton(B, P)
+        self._proper_names_automaton = ProperNameCapitalsAutomaton()
         self._pos = 0
         self._capitalization_rules_exception_positions = set()
 
@@ -414,13 +416,13 @@ class Capitalizer:
         return ''.join(returning_chars)
 
 
-def get_cap_data(iter_text: Iterable[str], B, P) -> CapitalizationData:
-    decapitalizer = Decapitalizer(B, P)
+def get_cap_data(iter_text: Iterable[str]) -> CapitalizationData:
+    decapitalizer = Decapitalizer()
     for c in iter_text:
         next_seq = decapitalizer.feed(c)
     next_seq = decapitalizer.feed_end()
     cap_data = decapitalizer.get_capitalization_data()
-    print(f'Cap data: {len(cap_data.proper_names)} proper names, {len(cap_data.rule_exceptions)} exceptions')
+    # print(f'Cap data: {len(cap_data.proper_names)} proper names, {len(cap_data.rule_exceptions)} exceptions')
     return decapitalizer.get_capitalization_data()
 
 

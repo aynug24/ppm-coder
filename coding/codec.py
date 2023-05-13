@@ -1,7 +1,8 @@
 from typing import Iterable
-from statistic_encoder import LeftContextTree
-from bit_number import BitNumberRange, DecoderWithRange
+from coding.context_tree import LeftContextTree
+from coding.bit_number_range import BitNumberRange, DecoderWithRange
 import itertools
+
 
 class StatisticEncoder:
     def __init__(self, iter_chars, coding_params):

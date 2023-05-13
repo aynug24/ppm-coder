@@ -1,0 +1,7 @@
+.idea/
+tests/
+build/
+fenwick/
+bitarray/
+*dist-info/
+*/__pycache__/

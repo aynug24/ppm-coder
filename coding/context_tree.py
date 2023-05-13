@@ -1,33 +1,17 @@
-from typing import Dict, Optional, List, Iterable, Tuple, Callable
+#  из-за (быстро впиленной) поддержки нескольких параметров код запутанный и не очень...
+
+from typing import Dict, Optional, Iterable, Tuple, Callable
 from fenwick import FenwickTree
-from fenwick_utils import ExtendableFenwickTree
-from enum import Enum
-from dataclasses import dataclass
 
+from coding.coding_params import UpCharCodingAlrorithm
+from utils.fenwick_utils import ExtendableFenwickTree
 
-class UpCharCodingAlrorithm(Enum):
-    A_ALWAYS_ONE = 1
-    B_OTHER_CHAR_COUNT = 2
-    C_PLUS_ONE_ON_NEW_CHAR = 3
-    D_PLUS_HALF_ON_NEW_CHAR = 4
-
-    @staticmethod
-    def from_letter(c):
-        return [x for x in list(UpCharCodingAlrorithm) if x.name.startswith(c)][0]
-
-
-@dataclass
-class CodingParams:
-    context_length: int = 6
-    mask_seen: bool = False
-    exclude_on_update: bool = False
-    up_char_coding: UpCharCodingAlrorithm = UpCharCodingAlrorithm.A_ALWAYS_ONE
-    decapitalize: bool = True
 
 def fmt_dist(distribution, point, ctx: 'LeftContext'):
     total = distribution.prefix_sum(len(distribution))
     point_len = distribution[point]
-    return f'{point_len:3}/{total:4} ≈ {(point_len/total):.3f}, keys: {list(sorted(((ctx.seen_once_chars if ctx.seen_once_chars is not None else set()) | ctx.chars_to_indices.keys()) - {LeftContext.UP}))}'
+    return f'{point_len:3}/{total:4} ≈ {(point_len / total):.3f}, keys: {list(sorted(((ctx.seen_once_chars if ctx.seen_once_chars is not None else set()) | ctx.chars_to_indices.keys()) - {LeftContext.UP}))}'
+
 
 class LeftContextTree:
     SIGMA = 256
@@ -38,8 +22,10 @@ class LeftContextTree:
         self.root = None  # !!! kinda important...
 
         self.pseudo_root = LeftContext(None, '↓')
-        self.pseudo_root.chars_to_indices = {chr(c): c for c in range(LeftContextTree.SIGMA) if not (coding_params.decapitalize and chr(c).isupper())}
-        self.pseudo_root.indices_to_chars = {c: chr(c) for c in range(LeftContextTree.SIGMA) if not (coding_params.decapitalize and chr(c).isupper())}
+        self.pseudo_root.chars_to_indices = {chr(c): c for c in range(LeftContextTree.SIGMA) if
+                                             not (coding_params.decapitalize and chr(c).isupper())}
+        self.pseudo_root.indices_to_chars = {c: chr(c) for c in range(LeftContextTree.SIGMA) if
+                                             not (coding_params.decapitalize and chr(c).isupper())}
         self.pseudo_root.distribution = ExtendableFenwickTree(LeftContextTree.SIGMA)
         for c in range(LeftContextTree.SIGMA):
             self.pseudo_root.distribution.add(c, 1)

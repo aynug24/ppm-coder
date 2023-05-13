@@ -4,8 +4,7 @@ import time
 import threading
 from dataclasses import dataclass
 from typing import Iterable
-from statistic_encoder import CodingParams
-import random
+from coding.coding_params import CodingParams
 
 
 @dataclass
@@ -73,7 +72,6 @@ def get_archiver_stats(zip_func, unzip_func, path_to_txt: str, coding_params: Co
 
 
 def benchmark_all_params(zip_func, unzip_func, path_to_txt: str, coding_params: Iterable[CodingParams]):  # cap_params):
-    import psutil
 
     for coding_param in coding_params:
         bench_res = get_archiver_stats(zip_func, unzip_func, path_to_txt, coding_param)
