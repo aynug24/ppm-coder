@@ -245,10 +245,10 @@ class CapitalizationData:
 
 
 class Decapitalizer:
-    def __init__(self):
+    def __init__(self, B, P):
         self._consecutive_capitals_automaton = ConsecutiveCapitalsAutomaton()
         self._sentence_start_automaton = SentenceStartCapitalsAutomaton()
-        self._proper_names_automaton = ProperNameCapitalsAutomaton()
+        self._proper_names_automaton = ProperNameCapitalsAutomaton(B, P)
         self._pos = 0
         self._capitalization_rules_exception_positions = set()
 
@@ -414,11 +414,13 @@ class Capitalizer:
         return ''.join(returning_chars)
 
 
-def get_cap_data(iter_text: Iterable[str]) -> CapitalizationData:
-    decapitalizer = Decapitalizer()
+def get_cap_data(iter_text: Iterable[str], B, P) -> CapitalizationData:
+    decapitalizer = Decapitalizer(B, P)
     for c in iter_text:
         next_seq = decapitalizer.feed(c)
     next_seq = decapitalizer.feed_end()
+    cap_data = decapitalizer.get_capitalization_data()
+    print(f'Cap data: {len(cap_data.proper_names)} proper names, {len(cap_data.rule_exceptions)} exceptions')
     return decapitalizer.get_capitalization_data()
 
 

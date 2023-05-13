@@ -11,6 +11,10 @@ class UpCharCodingAlrorithm(Enum):
     C_PLUS_ONE_ON_NEW_CHAR = 3
     D_PLUS_HALF_ON_NEW_CHAR = 4
 
+    @staticmethod
+    def from_letter(c):
+        return [x for x in list(UpCharCodingAlrorithm) if x.name.startswith(c)][0]
+
 
 @dataclass
 class CodingParams:
@@ -20,6 +24,10 @@ class CodingParams:
     up_char_coding: UpCharCodingAlrorithm = UpCharCodingAlrorithm.A_ALWAYS_ONE
     decapitalize: bool = True
 
+def fmt_dist(distribution, point, ctx: 'LeftContext'):
+    total = distribution.prefix_sum(len(distribution))
+    point_len = distribution[point]
+    return f'{point_len:3}/{total:4} ≈ {(point_len/total):.3f}, keys: {list(sorted(((ctx.seen_once_chars if ctx.seen_once_chars is not None else set()) | ctx.chars_to_indices.keys()) - {LeftContext.UP}))}'
 
 class LeftContextTree:
     SIGMA = 256
@@ -49,8 +57,10 @@ class LeftContextTree:
             while True:
                 char_idx = encode_ctx.chars_to_indices.get(c)
                 if char_idx is not None:
+                    # print(f'''Encoding \'{c}\' in {("'" + encode_ctx.s + "'"):8} as {char_idx:2} in {fmt_dist(encode_ctx.distribution, char_idx, encode_ctx)}: {encode_ctx.distribution.__repr__()}''')
                     yield encode_ctx.distribution, char_idx
                     break
+                # print(f'''Encoding \'↑\' in {("'" + encode_ctx.s + "'"):8} as {0:2} in {fmt_dist(encode_ctx.distribution, 0, encode_ctx)}: {encode_ctx.distribution.__repr__()}''')
                 yield encode_ctx.distribution, encode_ctx.chars_to_indices[LeftContext.UP]
                 encode_ctx = encode_ctx.parent
         else:
@@ -60,8 +70,10 @@ class LeftContextTree:
                 masked_distribution, _, char_masked_idx = encode_ctx.distribution.without_chars(
                     seen_chars, encode_ctx.chars_to_indices, find_char_idx=c)
                 if char_masked_idx is not None:
+                    # print(f'''Encoding \'{c}\' in {("'" + encode_ctx.s + "'"):8} as {char_masked_idx:2} in {fmt_dist(masked_distribution, char_masked_idx, encode_ctx)}: {masked_distribution.__repr__()}''')
                     yield masked_distribution, char_masked_idx
                     break
+                # print(f'''Encoding \'↑\' in {("'" + encode_ctx.s + "'"):8} as {0:2} in {fmt_dist(masked_distribution, 0, encode_ctx)}: {masked_distribution.__repr__()}''')
                 yield masked_distribution, 0  # i give up using LeftCtx.UP, lets just write zero here
                 seen_chars |= encode_ctx.chars_to_indices.keys()
                 seen_chars.remove(LeftContext.UP)
@@ -168,7 +180,6 @@ class LeftContext:
         self._children: Optional[Dict[str, 'LeftContext']] = None
 
         self.distribution = ExtendableFenwickTree(1)
-        # todo init UP
         # self.distribution.add(0, 1)
         self.chars_to_indices = {LeftContext.UP: 0}
         self.indices_to_chars = {0: LeftContext.UP}
@@ -183,10 +194,10 @@ class LeftContext:
                 self.indices_to_chars[len(self.indices_to_chars)] = c
 
             if up_char_coding == UpCharCodingAlrorithm.A_ALWAYS_ONE:
+                self.distribution.inner[0] = 1
                 self.distribution.append(1)
             elif up_char_coding == UpCharCodingAlrorithm.B_OTHER_CHAR_COUNT:
-                self.seen_once_chars = self.seen_once_chars or set(self.chars_to_indices)
-                self.seen_once_chars.add(c)
+                self.seen_once_chars = self.seen_once_chars or {c}
 
                 self.distribution.add(self.chars_to_indices[LeftContext.UP], 1)
             elif up_char_coding == UpCharCodingAlrorithm.C_PLUS_ONE_ON_NEW_CHAR:
@@ -203,7 +214,7 @@ class LeftContext:
                     self.seen_once_chars is not None and c in self.seen_once_chars:
 
                 self.seen_once_chars.remove(c)
-                if self.seen_once_chars is None:
+                if len(self.seen_once_chars) == 0:
                     self.seen_once_chars = None
 
                 char_idx = len(self.chars_to_indices)
