@@ -27,17 +27,14 @@ class LeftContextTree:
     def __init__(self, coding_params):
         self.coding_params = coding_params
 
-        self.root = LeftContext(None)
+        self.root = None  # !!! kinda important...
 
-        self.pseudo_root = LeftContext(None)
-        self.pseudo_root.chars_to_indices = {chr(c): c for c in range(LeftContextTree.SIGMA)}
-        self.pseudo_root.indices_to_chars = {c: chr(c) for c in range(LeftContextTree.SIGMA)}
+        self.pseudo_root = LeftContext(None, '↓')
+        self.pseudo_root.chars_to_indices = {chr(c): c for c in range(LeftContextTree.SIGMA) if not (coding_params.decapitalize and chr(c).isupper())}
+        self.pseudo_root.indices_to_chars = {c: chr(c) for c in range(LeftContextTree.SIGMA) if not (coding_params.decapitalize and chr(c).isupper())}
         self.pseudo_root.distribution = ExtendableFenwickTree(LeftContextTree.SIGMA)
         for c in range(LeftContextTree.SIGMA):
             self.pseudo_root.distribution.add(c, 1)
-        self.pseudo_root._children = {c: self.root for c in range(LeftContextTree.SIGMA)}
-
-        self.root.parent = self.pseudo_root
 
         self.left_ctx = ''
 
@@ -111,6 +108,9 @@ class LeftContextTree:
             self.left_ctx = self.left_ctx[-self.coding_params.context_length + 1:] + char
 
     def _go_down(self, left_ctx):
+        if self.root is None:
+            return self.pseudo_root
+
         current = self.root
         for c in reversed(left_ctx):
             child = current.get_children().get(c)
@@ -120,6 +120,10 @@ class LeftContextTree:
         return current
 
     def _extend_down(self, left_ctx):
+        if self.root is None:
+            self.root = LeftContext(self.pseudo_root, '')
+            return self.root
+
         current = self.root
         for c in reversed(left_ctx):
             child = current.get_children().get(c)
@@ -158,13 +162,14 @@ class LeftContextTree:
 class LeftContext:
     UP = '↑'
 
-    def __init__(self, parent: Optional['LeftContext']):
+    def __init__(self, parent: Optional['LeftContext'], s):
+        self.s = s
         self.parent = parent
         self._children: Optional[Dict[str, 'LeftContext']] = None
 
         self.distribution = ExtendableFenwickTree(1)
         # todo init UP
-        self.distribution.add(0, 1)
+        # self.distribution.add(0, 1)
         self.chars_to_indices = {LeftContext.UP: 0}
         self.indices_to_chars = {0: LeftContext.UP}
         self.seen_once_chars = None  # for B Up encoding when assigning freq zero (which will prob break projections)
@@ -172,7 +177,7 @@ class LeftContext:
     def add(self, c, up_char_coding: UpCharCodingAlrorithm):
         char_idx = self.chars_to_indices.get(c)
         if char_idx is None or (self.seen_once_chars is not None and c not in self.seen_once_chars):
-
+            # new char
             if up_char_coding != UpCharCodingAlrorithm.B_OTHER_CHAR_COUNT:
                 self.chars_to_indices[c] = len(self.chars_to_indices)
                 self.indices_to_chars[len(self.indices_to_chars)] = c
@@ -193,7 +198,7 @@ class LeftContext:
             else:
                 raise Exception()
         else:
-
+            # already seen char
             if up_char_coding == UpCharCodingAlrorithm.B_OTHER_CHAR_COUNT and \
                     self.seen_once_chars is not None and c in self.seen_once_chars:
 
@@ -222,6 +227,6 @@ class LeftContext:
         return char in self.chars_to_indices or (self.seen_once_chars is not None and char in self.seen_once_chars)
 
     def make_child(self, c):
-        child = LeftContext(self)
+        child = LeftContext(self, c + self.s)
         self.get_children()[c] = child
         return child
