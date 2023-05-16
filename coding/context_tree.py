@@ -37,6 +37,7 @@ class LeftContextTree:
     def encode(self, c) -> Iterable[Tuple[FenwickTree, int]]:
         # print(f'ENCODING {c} IN \'{self.left_ctx}\'')
         char_ctx = self._go_down(self.left_ctx)
+        longest_ctx = char_ctx
 
         if not self.coding_params.mask_seen:
             encode_ctx = char_ctx
@@ -65,7 +66,7 @@ class LeftContextTree:
                 seen_chars.remove(LeftContext.UP)
                 encode_ctx = encode_ctx.parent
 
-        self._update_tree(self.left_ctx, c, encode_ctx)
+        self._update_tree(self.left_ctx, c, encode_ctx, longest_ctx)
         self.left_ctx = self.left_ctx[-self.coding_params.context_length + 1:] + c
         # print(f'ENCODED, CTX IS {self.left_ctx}')
 
@@ -73,6 +74,7 @@ class LeftContextTree:
         decoded = []
         while True:
             char_ctx = self._go_down(self.left_ctx)
+            longest_ctx = char_ctx
 
             if not self.coding_params.mask_seen:
                 encode_ctx = char_ctx
@@ -102,7 +104,7 @@ class LeftContextTree:
                         yield char
                         break
 
-            self._update_tree(self.left_ctx, char, encode_ctx)
+            self._update_tree(self.left_ctx, char, encode_ctx, longest_ctx)
             self.left_ctx = self.left_ctx[-self.coding_params.context_length + 1:] + char
 
     def _go_down(self, left_ctx):
@@ -131,7 +133,7 @@ class LeftContextTree:
                 current = child
         return current
 
-    def _update_tree(self, left_ctx, c, encoding_ctx):
+    def _update_tree(self, left_ctx, c, encoding_ctx, longest_ctx):
         current = self._extend_down(left_ctx)
 
         if not self.coding_params.exclude_on_update:
@@ -142,13 +144,13 @@ class LeftContextTree:
                     break
         else:
 
-            if current != encoding_ctx:
-                while True:
-                    current.add(c, self.coding_params.up_char_coding)
-                    if current == encoding_ctx:
-                        break
-                    current = current.parent
-            else:
+            while True:
+                current.add(c, self.coding_params.up_char_coding)
+                if current == encoding_ctx:
+                    break
+                current = current.parent
+
+            if longest_ctx == encoding_ctx:
                 while True:
                     char_count = current.get_char_count()
                     if not (char_count == 0 or char_count == 1 and current.contains(c)):
