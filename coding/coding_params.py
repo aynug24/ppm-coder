@@ -15,8 +15,8 @@ class UpCharCodingAlrorithm(Enum):
 
 @dataclass
 class CodingParams:
-    context_length: int = 6
-    mask_seen: bool = False
+    context_length: int = 5
+    mask_seen: bool = True
     exclude_on_update: bool = False
     up_char_coding: UpCharCodingAlrorithm = UpCharCodingAlrorithm.A_ALWAYS_ONE
-    decapitalize: bool = True
+    decapitalize: bool = False

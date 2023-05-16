@@ -10,7 +10,7 @@ from utils.fenwick_utils import ExtendableFenwickTree
 def fmt_dist(distribution, point, ctx: 'LeftContext'):
     total = distribution.prefix_sum(len(distribution))
     point_len = distribution[point]
-    return f'{point_len:3}/{total:4} ≈ {(point_len / total):.3f}, keys: {list(sorted(((ctx.seen_once_chars if ctx.seen_once_chars is not None else set()) | ctx.chars_to_indices.keys()) - {LeftContext.UP}))}'
+    return f'{point_len:3}/{total:4} ≈ {(point_len / total):.3f}, seen_once: {list(sorted(ctx.seen_once_chars if ctx.seen_once_chars is not None else []))}, other keys: {list(ctx.chars_to_indices.keys())}'
 
 
 class LeftContextTree:
@@ -173,7 +173,7 @@ class LeftContext:
 
     def add(self, c, up_char_coding: UpCharCodingAlrorithm):
         char_idx = self.chars_to_indices.get(c)
-        if char_idx is None or (self.seen_once_chars is not None and c not in self.seen_once_chars):
+        if char_idx is None and (self.seen_once_chars is None or c not in self.seen_once_chars):
             # new char
             if up_char_coding != UpCharCodingAlrorithm.B_OTHER_CHAR_COUNT:
                 self.chars_to_indices[c] = len(self.chars_to_indices)
@@ -183,7 +183,8 @@ class LeftContext:
                 self.distribution.inner[0] = 1
                 self.distribution.append(1)
             elif up_char_coding == UpCharCodingAlrorithm.B_OTHER_CHAR_COUNT:
-                self.seen_once_chars = self.seen_once_chars or {c}
+                self.seen_once_chars = self.seen_once_chars or set()
+                self.seen_once_chars.add(c)
 
                 self.distribution.add(self.chars_to_indices[LeftContext.UP], 1)
             elif up_char_coding == UpCharCodingAlrorithm.C_PLUS_ONE_ON_NEW_CHAR:
@@ -196,8 +197,7 @@ class LeftContext:
                 raise Exception()
         else:
             # already seen char
-            if up_char_coding == UpCharCodingAlrorithm.B_OTHER_CHAR_COUNT and \
-                    self.seen_once_chars is not None and c in self.seen_once_chars:
+            if char_idx is None:
 
                 self.seen_once_chars.remove(c)
                 if len(self.seen_once_chars) == 0:
